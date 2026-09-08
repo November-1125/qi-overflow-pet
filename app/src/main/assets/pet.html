@@ -861,6 +861,48 @@
       onLongPressAnimation: function () { setState('sad'); backToIdleAfter(1200); },
       onReturned: function () { setState('idle'); }
     };
+    /* ============================================================
+     * 6.5 全局兼容函数（Kotlin / Supabase 轮询调用）
+     * ============================================================ */
+    var MOOD_MAP = {
+      neutral: 'idle', happy: 'happy', sleepy: 'sleep',
+      surprised: 'idle_blink', shy: 'action_shy',
+      angry: 'pet_expr_angry', wink: 'pet_expr_wink'
+    };
+    window.setPetMood = function(mood) {
+      var state = MOOD_MAP[mood] || 'idle';
+      if (state === 'sleep') { pet.isSleeping = true; }
+      setState(state);
+      if (state !== 'sleep') backToIdleAfter(2500);
+    };
+    window.setPetSpeech = function(text, ms) {
+      showBubble(text || '', ms || 2500);
+    };
+    window.setDragging = function(isDragging) {
+      if (isDragging) { setState('drag'); container.classList.add('dragging'); }
+      else { container.classList.remove('dragging'); setState('drag_release'); backToIdleAfter(250); }
+    };
+    /* ============================================================
+     * 6.6 Supabase 轮询（AI 写 pet_state → 桌宠读 mood/speech）
+     * ============================================================ */
+    var SUPABASE_URL = 'https://jaxpebgbgjwzvghemzcn.supabase.co';
+    var SUPABASE_KEY = 'sb_publishable_Tbb_IqPz_QyOczMYOlPJfw_V8f15em-';
+    var lastStateId = 0;
+    function pollSupabase() {
+      try {
+        fetch(SUPABASE_URL + '/rest/v1/pet_state?id=gt.' + lastStateId + '&order=id.asc&limit=10', {
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+        }).then(function(r) { return r.json(); }).then(function(rows) {
+          if (!rows || !rows.length) return;
+          rows.forEach(function(row) {
+            lastStateId = Math.max(lastStateId, row.id || 0);
+            if (row.state_key === 'mood') window.setPetMood(row.state_value);
+            else if (row.state_key === 'speech') window.setPetSpeech(row.state_value, 3000);
+          });
+        }).catch(function() {});
+      } catch (e) {}
+    }
+    setInterval(pollSupabase, 15000);
     window.moveWindowTo = function (x, y) {
       var java = window.PetBridge;
       if (java && typeof java.moveTo === 'function') java.moveTo(Math.round(x), Math.round(y));
@@ -921,7 +963,7 @@
     }
     // 调试：URL 带 #chat 时直接打开聊天面板
     if (location.hash === '#chat') pet.toggleChat(true);
-    console.log('🦀 栖蟹崽桌宠 v0.4.0 已启动！');
+    console.log('🦀 栖蟹崽桌宠 v0.6.0 已启动！');
   })();
   </script>
 </body>
