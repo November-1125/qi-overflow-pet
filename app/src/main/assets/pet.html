@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>栖蟹崽桌宠</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; }
+    body {
+      font-family: sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #pet-container {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 140px;
+      height: 90px;
+      cursor: grab;
+      touch-action: none;
+      transition: box-shadow 0.15s ease;
+      border-radius: 14px;
+      z-index: 5;
+    }
+    #pet-container.dragging {
+      cursor: grabbing;
+      transform: scale(1.06);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.22);
+    }
+    /* 按压挤压反馈 */
+    #pet-container.pressed {
+      transform: scale(0.94);
+    }
+    /* 松手回弹（拖拽落地） */
+    #pet-container.dropped { animation: dropBounce 0.5s ease-in-out; }
+    @keyframes dropBounce {
+      0%   { transform: scale(1.18) translateY(-10px); }
+      40%  { transform: scale(0.92) translateY(2px); }
+      70%  { transform: scale(1.05) translateY(-2px); }
+      100% { transform: scale(1) translateY(0); }
+    }
+    #pet-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;
+    }
+    /* 睡觉浮动 */
+    #pet-container.sleeping { animation: sleepFloat 2.5s ease-in-out infinite; }
+    @keyframes sleepFloat {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-4px); }
+    }
+    /* 落地回弹 */
+    #pet-container.bouncing { animation: bounceAnim 0.45s ease-in-out; }
+    @keyframes bounceAnim {
+      0%   { transform: scale(1); }
+      30%  { transform: scale(1.12) translateY(-8px); }
+      60%  { transform: scale(0.94); }
+      100% { transform: scale(1); }
+    }
+    /* 气泡 */
+    #bubble {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.96);
+      color: #333;
+      font-size: 11px;
+      line-height: 1.4;
+      padding: 4px 9px;
+      border-radius: 10px;
+      max-width: 260px;
+      white-space: nowrap;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      display: none;
+      pointer-events: none;
+      z-index: 20;
+    }
+    #bubble::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -4px;
+      border: 5px solid transparent;
+      border-top-color: rgba(255,255,255,0.96);
+    }
+    /* 聊天面板 */
+    #chat-panel {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 0;
+      width: min(230px, calc(100% - 6px));
+      background: rgba(255,255,255,0.97);
+      border-radius: 12px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+      padding: 8px;
+      display: none;
+      z-index: 30;
+      font-size: 11px;
+      color: #444;
+    }
+    #chat-panel.open { display: block; }
+    #chat-panel .cp-title {
+      font-weight: 600;
+      color: #b06a3c;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #chat-panel .cp-close {
+      color: #999;
+      padding: 0 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #chat-log {
+      max-height: 74px;
+      overflow-y: auto;
+      margin-bottom: 6px;
+      line-height: 1.45;
+    }
+    #chat-log .msg { margin-bottom: 2px; }
+    #chat-log .me { color: #333; }
+    #chat-log .pet { color: #b06a3c; }
+    #chat-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    #chat-btns button {
+      background: #fbe9dc;
+      border: none;
+      border-radius: 8px;
+      padding: 5px 0;
+      font-size: 11px;
+      color: #b06a3c;
+      cursor: pointer;
+    }
+    #chat-btns button:active { background: #f5d3b8; }
+    #chat-input {
+      width: 100%;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+      outline: none;
+      background: #fff;
+    }
+    /* 心情指示 */
+    #mood {
+      position: absolute;
+      right: 0;
+      bottom: 100%;
+      font-size: 10px;
+      background: rgba(255,255,255,0.85);
+      border-radius: 8px;
+      padding: 1px 6px;
+      color: #b06a3c;
+      display: none;
+      pointer-events: none;
+      z-index: 15;
+    }
+  </style>
+</head>
+<body>
+  <div id="pet-container">
+    <img id="pet-svg" src="pet_svg/pet_anim_breathe.svg" alt="栖蟹崽">
+    <div id="bubble"></div>
+    <div id="mood"></div>
+  </div>
+  <div id="chat-panel">
+    <div class="cp-title">🦀 小栖聊天室 <span class="cp-close" onclick="window.pet && pet.toggleChat()">✕</span></div>
+    <div id="chat-log"></div>
+    <div id="chat-btns">
+      <button onclick="window.pet && pet.quick(0)">🌞早安</button>
+      <button onclick="window.pet && pet.quick(1)">🌙晚安</button>
+      <button onclick="window.pet && pet.quick(2)">🍔吃饭</button>
+      <button onclick="window.pet && pet.quick(3)">🤗摸摸</button>
+      <button onclick="window.pet && pet.quick(4)">✨夸我</button>
+      <button onclick="window.pet && pet.quick(5)">😂笑话</button>
+      <button onclick="window.pet && pet.quick(6)">🎵唱歌</button>
+      <button onclick="window.pet && pet.quick(7)">😜卖萌</button>
+    </div>
+    <input id="chat-input" placeholder="说点什么，回车发送…">
+  </div>
+  <script>
+  (function () {
+    'use strict';
+    var container = document.getElementById('pet-container');
+    var svg = document.getElementById('pet-svg');
+    var bubble = document.getElementById('bubble');
+    var mood = document.getElementById('mood');
+    var panel = document.getElementById('chat-panel');
+    var chatLog = document.getElementById('chat-log');
+    var chatInput = document.getElementById('chat-input');
+
+    /* ============================================================
+     * 1. 状态 → SVG 文件名映射（全部是 assets/pet_svg/ 下真实存在的文件）
+     * ============================================================ */
+    var STATE_SVG = {
+      idle:            'pet_anim_breathe.svg',
+      idle_blink:      'app_state_idle_blink.svg',
+      idle_look_left:  'app_state_idle_look_left.svg',
+      idle_look_right: 'app_state_idle_look_right.svg',
+      walk_left:       'pet_anim_walk.svg',
+      walk_right:      'pet_anim_walk.svg',
+      drag:            'app_state_drag.svg',
+      drag_release:    'app_state_drag_release.svg',
+      bounce:          'app_state_bounce.svg',
+      happy:           'pet_anim_jump.svg',
+      sleep:           'app_state_sleep.svg',
+      wake_up:         'app_state_wake_up.svg',
+      eat:             'app_state_eat.svg',
+      sad:             'app_state_sad.svg',
+      action_screenshot:  'action_screenshot.svg',
+      action_charge:      'action_charge.svg',
+      action_low_battery: 'action_low_battery.svg',
+      app_wechat:     'app_wechat.svg',
+      app_douyin:     'app_douyin.svg',
+      app_game:       'app_game.svg',
+      app_music:      'app_music.svg',
+      app_camera:     'app_camera.svg',
+      app_video:      'app_video.svg',
+      app_browser:    'app_browser.svg',
+      app_settings:   'app_settings.svg',
+      app_takeout:    'app_takeout.svg',
+      app_map:        'app_map.svg',
+      app_shop:       'app_shop.svg',
+      app_gallery:    'app_gallery.svg',
+      app_fitness:    'app_fitness.svg',
+      app_reading:    'app_reading.svg',
+      app_weather:    'app_weather.svg',
+      app_study:      'app_study.svg',
+      app_stock:      'app_stock.svg',
+      app_mail:       'app_mail.svg',
+      /* ---------- 100+ 动作扩展（PixelPet_Filled 完整素材包） ---------- */
+      float:          'pet_anim_float.svg',
+      action_bath:        'action_bath.svg',
+      action_bluetooth:   'action_bluetooth.svg',
+      action_bored:       'action_bored.svg',
+      action_bow_down:    'action_bow_down.svg',
+      action_brush:       'action_brush.svg',
+      action_copypaste:   'action_copypaste.svg',
+      action_cry:         'action_cry.svg',
+      action_delete:      'action_delete.svg',
+      action_download:    'action_download.svg',
+      action_drinking:    'action_drinking.svg',
+      action_eating:      'action_eating.svg',
+      action_evolution:   'action_evolution.svg',
+      action_fly:         'action_fly.svg',
+      action_hide:        'action_hide.svg',
+      action_hotspot:     'action_hotspot.svg',
+      action_hug:         'action_hug.svg',
+      action_location:    'action_location.svg',
+      action_makeup:      'action_makeup.svg',
+      action_mute:        'action_mute.svg',
+      action_night:       'action_night.svg',
+      action_notification:'action_notification.svg',
+      action_petted:      'action_petted.svg',
+      action_poke:        'action_poke.svg',
+      action_proud:       'action_proud.svg',
+      action_rain:        'action_rain.svg',
+      action_revive:      'action_revive.svg',
+      action_rotate:      'action_rotate.svg',
+      action_run_away:    'action_run_away.svg',
+      action_salute:      'action_salute.svg',
+      action_search:      'action_search.svg',
+      action_share:       'action_share.svg',
+      action_shy:         'action_shy.svg',
+      action_sleepy:      'action_sleepy.svg',
+      action_transform:   'action_transform.svg',
+      action_upload:      'action_upload.svg',
+      action_wave:        'action_wave.svg',
+      holiday_birthday:   'holiday_birthday.svg',
+      holiday_christmas:  'holiday_christmas.svg',
+      holiday_dragon_boat:'holiday_dragon_boat.svg',
+      holiday_halloween:  'holiday_halloween.svg',
+      holiday_mid_autumn: 'holiday_mid_autumn.svg',
+      holiday_new_year:   'holiday_new_year.svg',
+      holiday_spring:     'holiday_spring.svg',
+      holiday_valentine:  'holiday_valentine.svg',
+      weather_fog:        'weather_fog.svg',
+      weather_rainbow:    'weather_rainbow.svg',
+      weather_snow:       'weather_snow.svg',
+      weather_thunder:    'weather_thunder.svg',
+      weather_wind:       'weather_wind.svg',
+      pet_expr_angry:     'pet_expr_angry.svg',
+      pet_expr_angry_blush:  'pet_expr_angry_blush.svg',
+      pet_expr_love:      'pet_expr_love.svg',
+      pet_expr_love_blush:   'pet_expr_love_blush.svg',
+      pet_expr_sad:       'pet_expr_sad.svg',
+      pet_expr_sad_blush:    'pet_expr_sad_blush.svg',
+      pet_expr_surprised: 'pet_expr_surprised.svg',
+      pet_expr_surprised_blush: 'pet_expr_surprised_blush.svg',
+      pet_expr_wink:      'pet_expr_wink.svg',
+      pet_expr_wink_blush:   'pet_expr_wink_blush.svg',
+      /* 21 个新软件图标（PixelPet_Filled 扩充） */
+      app_alarm:     'app_alarm.svg',
+      app_bank:      'app_bank.svg',
+      app_calculator:'app_calculator.svg',
+      app_car:       'app_car.svg',
+      app_cloud:     'app_cloud.svg',
+      app_courier:   'app_courier.svg',
+      app_dating:    'app_dating.svg',
+      app_files:     'app_files.svg',
+      app_health:    'app_health.svg',
+      app_house:     'app_house.svg',
+      app_job:       'app_job.svg',
+      app_live:      'app_live.svg',
+      app_lottery:   'app_lottery.svg',
+      app_news:      'app_news.svg',
+      app_notes:     'app_notes.svg',
+      app_office:    'app_office.svg',
+      app_pay:       'app_pay.svg',
+      app_social:    'app_social.svg',
+      app_taxi:      'app_taxi.svg',
+      app_translate: 'app_translate.svg',
+      app_travel:    'app_travel.svg'
+    };
+    var APP_STATES = {
+      '微信': 'app_wechat', '抖音': 'app_douyin', '游戏': 'app_game', '音乐': 'app_music',
+      '相机': 'app_camera', '视频': 'app_video', '浏览器': 'app_browser', '设置': 'app_settings',
+      '外卖': 'app_takeout', '地图': 'app_map', '购物': 'app_shop', '相册': 'app_gallery',
+      '健身': 'app_fitness', '阅读': 'app_reading', '天气': 'app_weather', '学习': 'app_study',
+      '股票': 'app_stock', '邮件': 'app_mail',
+      '闹钟': 'app_alarm', '银行': 'app_bank', '计算器': 'app_calculator', '汽车': 'app_car',
+      '云盘': 'app_cloud', '快递': 'app_courier', '交友': 'app_dating', '文件': 'app_files',
+      '健康': 'app_health', '家居': 'app_house', '求职': 'app_job', '直播': 'app_live',
+      '彩票': 'app_lottery', '新闻': 'app_news', '便签': 'app_notes', '办公': 'app_office',
+      '支付': 'app_pay', '社交': 'app_social', '打车': 'app_taxi', '翻译': 'app_translate',
+      '旅行': 'app_travel'
+    };
+
+    /* ============================================================
+     * 2. 桌宠对象
+     * ============================================================ */
+    var pet = {
+      x: 50, y: 50,
+      currentState: 'idle',
+      isDragging: false,
+      dragOffsetX: 0, dragOffsetY: 0,
+      lastX: 0, lastY: 0,
+      lastInteraction: Date.now(),
+      isSleeping: false,
+      walkDirection: 1,
+      blinkTimer: null, lookTimer: null, sleepTimer: null,
+      lastTapTime: 0,
+      bubbleTimer: null, stateTimeout: null,
+      pendingIdle: false,
+      floorY: 0,
+      chatOpen: false,
+      longPressTimer: null,
+      pendingTapTimer: null,
+      tapMoved: false,
+      heart: 100,
+      welcomeDone: false,
+      wx: 0, wy: 0,          // 悬浮窗窗口屏幕坐标（真机拖动用，前端维护逻辑值）
+      hasBridge: false       // 是否在真 APK（有 PetBridge）
+    };
+
+    function resetInitialPos() {
+      var java = window.PetBridge;
+      pet.hasBridge = !!(java && typeof java.moveBy === 'function');
+      var saved = null;
+      try { saved = JSON.parse(localStorage.getItem('qi_pet_pos') || 'null'); } catch (e) {}
+      if (pet.hasBridge) {
+        // 真机：宠物 CSS 固定在视口内，窗口整体移动；位置记忆存窗口坐标
+        pet.x = Math.max(0, Math.round((window.innerWidth - 140) / 2));
+        pet.y = Math.max(0, Math.round((window.innerHeight - 90) / 2));
+        applyPos();
+        if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+          pet.wx = saved.x; pet.wy = saved.y;
+        } else {
+          pet.wx = Math.max(0, Math.round(screen.width / 2 - 70));
+          pet.wy = Math.max(0, Math.round(screen.height * 0.3));
+        }
+        window.moveWindowTo(pet.wx, pet.wy);
+      } else {
+        // 浏览器调试：CSS 移动
+        if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+          pet.x = saved.x; pet.y = saved.y;
+        } else {
+          pet.x = Math.max(0, Math.round((window.innerWidth - 140) / 2));
+          pet.y = Math.max(0, Math.round((window.innerHeight - 90) / 2));
+        }
+        pet.floorY = Math.max(0, window.innerHeight - 90);
+        applyPos();
+      }
+    }
+    function savePosition() {
+      try {
+        var pos = pet.hasBridge
+          ? { x: Math.round(pet.wx), y: Math.round(pet.wy) }
+          : { x: Math.round(pet.x), y: Math.round(pet.y) };
+        localStorage.setItem('qi_pet_pos', JSON.stringify(pos));
+      } catch (e) {}
+    }
+    // Kotlin 的 moveBy/onTap 会触发"3 秒飘回"；把飘回原点重置为当前位置即可规避
+    function resetReturnOrigin() {
+      if (pet.hasBridge) window.moveWindowTo(pet.wx, pet.wy);
+    }
+    function loadHeart() {
+      try { var h = parseInt(localStorage.getItem('qi_pet_heart') || '', 10); if (!isNaN(h)) return h; } catch (e) {}
+      return 100;
+    }
+    function saveHeart() {
+      try { localStorage.setItem('qi_pet_heart', String(pet.heart)); } catch (e) {}
+    }
+    function applyPos() {
+      container.style.left = pet.x + 'px';
+      container.style.top = pet.y + 'px';
+    }
+
+    /* ---------- 状态切换 ---------- */
+    function setState(state) {
+      if (pet.currentState === state) return;
+      pet.currentState = state;
+      var file = STATE_SVG[state] || ('app_state_' + state + '.svg');
+      svg.src = 'pet_svg/' + file;
+      container.classList.remove('sleeping', 'bouncing');
+      if (state === 'sleep') container.classList.add('sleeping');
+      if (state === 'bounce') {
+        container.classList.add('bouncing');
+        var self = container;
+        setTimeout(function () { self.classList.remove('bouncing'); }, 500);
+      }
+      clearTimeout(pet.stateTimeout);
+      pet.stateTimeout = null;
+    }
+    function backToIdleAfter(ms) {
+      clearTimeout(pet.stateTimeout);
+      pet.stateTimeout = setTimeout(function () {
+        if (pet.currentState !== 'sleep' && pet.currentState !== 'drag' && !pet.isDragging) {
+          setState('idle');
+        }
+      }, ms);
+    }
+
+    /* ---------- 气泡 ---------- */
+    function showBubble(text, ms) {
+      bubble.textContent = text || '';
+      bubble.style.display = 'block';
+      clearTimeout(pet.bubbleTimer);
+      if (ms > 0) {
+        pet.bubbleTimer = setTimeout(function () { bubble.style.display = 'none'; }, ms);
+      }
+    }
+    function hideBubble() {
+      clearTimeout(pet.bubbleTimer);
+      bubble.style.display = 'none';
+    }
+
+    /* ---------- 心情条（互动加分） ---------- */
+    function addHeart(delta) {
+      pet.heart = Math.max(0, Math.min(100, pet.heart + delta));
+      saveHeart();
+      mood.style.display = 'block';
+      var face = pet.heart > 70 ? '😄' : (pet.heart > 40 ? '🙂' : '😐');
+      mood.textContent = face + ' ' + pet.heart;
+      clearTimeout(pet.moodTimer);
+      pet.moodTimer = setTimeout(function () { mood.style.display = 'none'; }, 3000);
+    }
+
+    /* ============================================================
+     * 3. 离线聊天（纯前端本地回复，Kotlin 无需改动）
+     * ============================================================ */
+    var QUICK_ITEMS = [
+      { t: '🌞早安',    keys: ['早', '早上', 'morning'], r: '早安呀！今天也要元气满满～🦀', s: 'happy', h: 5 },
+      { t: '🌙晚安',    keys: ['晚安', '睡觉', '睡', '晚'], r: '晚安好梦～明天见🌙', s: 'sleep', h: 5 },
+      { t: '🍔吃饭',    keys: ['吃', '饭', '饿'], r: '开饭开饭！我最爱小虾米了🦀🍤', s: 'eat', h: 8 },
+      { t: '🤗摸摸',    keys: ['摸', '抱', '亲'], r: '嘿嘿，好舒服～再摸摸嘛～', s: 'happy', h: 8 },
+      { t: '✨夸我',    keys: ['夸', '棒', '可爱', '帅'], r: '嘿嘿，我可是最棒的小螃蟹！🦀✨', s: 'happy', h: 8 },
+      { t: '😂笑话',    keys: ['笑话', '笑'], r: '螃蟹为什么横着走？因为竖着走会踩到自己的脚！🦀😂', s: 'happy', h: 6 },
+      { t: '🎵唱歌',    keys: ['唱', '歌'], r: '啦啦啦～我是快乐的小螃蟹～🦀🎶', s: 'happy', h: 6 },
+      { t: '😜卖萌',    keys: ['萌', '乖'], r: '蟹蟹我呀，最可爱啦～(≧ω≦)ゞ', s: 'happy', h: 6 }
+    ];
+    /* 100+ 动作的关键词触发（动作/节日/天气/表情，覆盖 PixelPet_Filled 素材） */
+    var EXTRA_KEYWORDS = [
+      { keys: ['洗澡', '洗香香', '泡澡'], s: 'action_bath', r: '洗个香香澡，干干净净～🛁', h: 6 },
+      { keys: ['跳舞', '转圈', '舞'], s: 'action_rotate', r: '转个圈圈跳起来～💃', h: 6 },
+      { keys: ['飞', '飞翔'], s: 'action_fly', r: '我要飞得更高～🦀✈️', h: 5 },
+      { keys: ['哭', '呜呜', '难过'], s: 'action_cry', r: '呜哇…别难过啦，抱抱我～', h: 3 },
+      { keys: ['害羞', '羞'], s: 'action_shy', r: '嘿嘿…被夸得害羞啦～', h: 5 },
+      { keys: ['敬礼', '敬'], s: 'action_salute', r: '敬礼！随时待命！🦀', h: 5 },
+      { keys: ['挥手', '嗨', '哈喽', '你好'], s: 'action_wave', r: '嗨～见到你真开心！', h: 5 },
+      { keys: ['下雨', '雨天', '雨'], s: 'action_rain', r: '下雨啦，要带伞哦～🌧️', h: 4 },
+      { keys: ['下雪', '雪'], s: 'weather_snow', r: '下雪咯，堆个雪人吧！❄️', h: 5 },
+      { keys: ['彩虹'], s: 'weather_rainbow', r: '雨过天晴，彩虹出现啦～🌈', h: 6 },
+      { keys: ['打雷', '雷'], s: 'weather_thunder', r: '轰隆隆，打雷啦～⛈️', h: 3 },
+      { keys: ['起雾', '雾'], s: 'weather_fog', r: '雾好大，像仙境一样～', h: 4 },
+      { keys: ['刮风', '风'], s: 'weather_wind', r: '风好大，发型都乱啦～🌬️', h: 4 },
+      { keys: ['新年', '元旦', '过年'], s: 'holiday_new_year', r: '新年快乐！红包拿来～🧧', h: 8 },
+      { keys: ['圣诞', '圣诞节'], s: 'holiday_christmas', r: 'Merry Christmas！圣诞快乐～🎄', h: 8 },
+      { keys: ['生日', '生日快乐'], s: 'holiday_birthday', r: '生日快乐！吃蛋糕啦～🎂', h: 8 },
+      { keys: ['情人节', '爱你', '喜欢你'], s: 'pet_expr_love', r: '我也喜欢你呀～❤️', h: 8 },
+      { keys: ['万圣', '万圣节'], s: 'holiday_halloween', r: '不给糖就捣蛋！🎃', h: 6 },
+      { keys: ['中秋', '月饼'], s: 'holiday_mid_autumn', r: '中秋快乐，一起吃月饼吧～🌕', h: 6 },
+      { keys: ['端午', '粽子'], s: 'holiday_dragon_boat', r: '端午安康，吃粽子咯～🐉', h: 6 },
+      { keys: ['生气', '怒', '气死'], s: 'pet_expr_angry', r: '哼！我生气啦！😤', h: -3 },
+      { keys: ['惊讶', '惊', '哇'], s: 'pet_expr_surprised', r: '哇！真的假的？！😮', h: 4 },
+      { keys: ['眨眼', 'wink'], s: 'pet_expr_wink', r: '眨眨眼，给你个电眼～😉', h: 6 },
+      { keys: ['飘', '漂浮', '浮'], s: 'float', r: '漂浮起来，轻飘飘的～', h: 5 },
+      { keys: ['打哈欠', '好困'], s: 'action_sleepy', r: '哈欠～有点困了呢', h: 3 },
+      { keys: ['点赞', '真棒'], s: 'action_proud', r: '嘿嘿，我很棒吧！', h: 5 },
+      { keys: ['通知', '提醒'], s: 'action_notification', r: '叮咚，有通知来啦～', h: 4 },
+      { keys: ['拍照', '照片'], s: 'action_screenshot', r: '咔嚓～拍个照！📸', h: 5 }
+    ];
+
+    function chatReply(input) {
+      var text = (input || '').trim().toLowerCase();
+      if (!text) return { r: '嘿嘿，我在听你说呢～', s: 'idle', h: 0 };
+      // 先匹配 100+ 动作关键词（更具体）
+      for (var i = 0; i < EXTRA_KEYWORDS.length; i++) {
+        for (var k = 0; k < EXTRA_KEYWORDS[i].keys.length; k++) {
+          if (text.indexOf(EXTRA_KEYWORDS[i].keys[k].toLowerCase()) >= 0) return { s: EXTRA_KEYWORDS[i].s, r: EXTRA_KEYWORDS[i].r, h: EXTRA_KEYWORDS[i].h };
+        }
+      }
+      // 再匹配 8 个快捷词
+      for (var i = 0; i < QUICK_ITEMS.length; i++) {
+        for (var k = 0; k < QUICK_ITEMS[i].keys.length; k++) {
+          if (text.indexOf(QUICK_ITEMS[i].keys[k].toLowerCase()) >= 0) return QUICK_ITEMS[i];
+        }
+      }
+      var fallbacks = [
+        { r: '嘿嘿，你说的我记下啦～', s: 'happy', h: 3 },
+        { r: 'emm…让我想想怎么回你～', s: 'idle', h: 2 },
+        { r: '收到收到！🦀', s: 'happy', h: 3 },
+        { r: '嘻嘻，你多说一点嘛～', s: 'idle', h: 2 }
+      ];
+      return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    }
+
+    function pushChat(role, text) {
+      var div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.textContent = (role === 'me' ? '你：' : '🦀 ') + text;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function doChat(text, fromQuick) {
+      var item = chatReply(text);
+      pushChat('me', text);
+      pushChat('pet', item.r);
+      // 状态 + 气泡 + 心情
+      pet.lastInteraction = Date.now();
+      pet.isSleeping = false;
+      if (item.s !== 'sleep') {
+        setState(item.s);
+        backToIdleAfter(2200);
+        showBubble(item.r, 2600);
+      } else {
+        pet.isSleeping = true;
+        setState('sleep');
+        showBubble(item.r, 2600);
+      }
+      addHeart(item.h || 0);
+      if (fromQuick) setTimeout(function () { pet.toggleChat(false); }, 1500);
+    }
+
+    /* ============================================================
+     * 4. 触摸交互：单击 / 双击(聊天) / 长按 / 拖动
+     * ============================================================ */
+    function onTouchStart(e) {
+      pet.tapStartX = e.clientX;
+      pet.tapStartY = e.clientY;
+      pet.tapMoved = false;
+      pet.lastInteraction = Date.now();
+      if (pet.chatOpen) { pet.toggleChat(false); return; }  // 面板打开时点击宠物→关面板
+      // 按压反馈（挤压变形）；睡觉时先唤醒
+      if (pet.isSleeping) {
+        pet.isSleeping = false;
+        setState('wake_up');
+        backToIdleAfter(600);
+      }
+      container.classList.remove('dropped', 'bouncing');
+      if (!pet.isDragging) container.classList.add('pressed');
+      // 长按
+      clearTimeout(pet.longPressTimer);
+      pet.longPressTimer = setTimeout(function () {
+        if (!pet.tapMoved && !pet.isDragging) {
+          pet.isSleeping = false;
+          setState('sad');
+          showBubble('哎呀，别捏我嘛～', 1600);
+          backToIdleAfter(1400);
+          var java = window.PetBridge;
+          if (java && typeof java.onLongPress === 'function') java.onLongPress();
+          resetReturnOrigin();   // 规避 Kotlin onLongPress 后的飘回
+        }
+      }, 650);
+    }
+
+    function onTouchMove(e) {
+      var dxm = Math.abs(e.clientX - pet.tapStartX);
+      var dym = Math.abs(e.clientY - pet.tapStartY);
+      if (dxm > 8 || dym > 8) pet.tapMoved = true;
+
+      if (!pet.isDragging) {
+        if (!pet.tapMoved) return;
+        // 开始拖动
+        pet.isDragging = true;
+        pet.isSleeping = false;
+        clearTimeout(pet.longPressTimer);
+        container.classList.remove('sleeping', 'pressed');
+        container.classList.add('dragging');
+        pet.dragOffsetX = e.clientX - pet.x;
+        pet.dragOffsetY = e.clientY - pet.y;
+        setState('drag');
+      }
+      var dx = e.clientX - pet.lastX;
+      var dy = e.clientY - pet.lastY;
+      pet.lastX = e.clientX;
+      pet.lastY = e.clientY;
+      if (pet.hasBridge) {
+        // 真机：只移动悬浮窗窗口（跟手），CSS 容器固定，避免双倍位移
+        pet.wx += dx; pet.wy += dy;
+        window.moveWindowBy(Math.round(dx), Math.round(dy));
+      } else {
+        // 浏览器调试：CSS 内移动
+        pet.x = e.clientX - pet.dragOffsetX;
+        pet.y = e.clientY - pet.dragOffsetY;
+        applyPos();
+      }
+    }
+
+    function onTouchEnd(e) {
+      clearTimeout(pet.longPressTimer);
+      if (pet.isDragging) {
+        pet.isDragging = false;
+        container.classList.remove('dragging', 'pressed');
+        if (pet.y > pet.floorY) { pet.y = pet.floorY; applyPos(); }
+        setState('drag_release');
+        backToIdleAfter(250);
+        // 松手回弹 + 保存位置
+        container.classList.remove('dropped');
+        void container.offsetWidth;  // 重启动画
+        container.classList.add('dropped');
+        setTimeout(function () { container.classList.remove('dropped'); }, 550);
+        resetReturnOrigin();   // 把飘回原点重置为当前位置，拖动后不飘回
+        savePosition();
+        pet.lastInteraction = Date.now();
+        return;
+      }
+      container.classList.remove('pressed');
+      // 点击（非拖动）
+      if (pet.tapMoved) return;
+      var now = Date.now();
+      if (now - pet.lastTapTime < 300) {
+        // 双击 → 聊天
+        clearTimeout(pet.pendingTapTimer);
+        pet.lastTapTime = 0;
+        pet.toggleChat(true);
+        return;
+      }
+      pet.lastTapTime = now;
+      // 单击延迟确认（等双击）
+      clearTimeout(pet.pendingTapTimer);
+      pet.pendingTapTimer = setTimeout(function () {
+        pet.isSleeping = false;
+        setState('happy');
+        showBubble('嘿嘿～', 1200);
+        backToIdleAfter(1000);
+        addHeart(2);
+        var java = window.PetBridge;
+        if (java && typeof java.onTap === 'function') java.onTap();
+        resetReturnOrigin();   // 规避 Kotlin onTap 后的飘回
+      }, 320);
+    }
+
+    /* ---------- 聊天面板开关 ---------- */
+    pet.toggleChat = function (forceOpen) {
+      var open = forceOpen !== undefined ? !!forceOpen : !pet.chatOpen;
+      pet.chatOpen = open;
+      panel.classList.toggle('open', open);
+      if (open) {
+        pet.lastInteraction = Date.now();
+        chatInput.focus();
+      }
+    };
+    pet.quick = function (idx) {
+      var item = QUICK_ITEMS[idx];
+      if (item) doChat(item.t, true);
+    };
+    chatInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        var v = chatInput.value;
+        if (v.trim()) { doChat(v, false); chatInput.value = ''; }
+      }
+    });
+
+    /* ============================================================
+     * 5. 状态机：走路 / 眨眼 / 看左右 / 睡觉
+     * ============================================================ */
+    function startWalking() {
+      var walk = function () {
+        if (pet.isDragging || pet.isSleeping) return;
+        pet.x += pet.walkDirection * 3;
+        var maxX = Math.max(0, window.innerWidth - 140);
+        if (pet.x >= maxX) { pet.x = maxX; pet.walkDirection = -1; setState('bounce'); backToIdleAfter(300); }
+        else if (pet.x <= 0) { pet.x = 0; pet.walkDirection = 1; setState('bounce'); backToIdleAfter(300); }
+        applyPos();
+        if (!pet.isDragging && !pet.isSleeping) {
+          setState(pet.walkDirection === 1 ? 'walk_right' : 'walk_left');
+          setTimeout(walk, 100);
+        }
+      };
+      var schedule = function () {
+        setTimeout(function () {
+          if (!pet.isDragging && !pet.isSleeping) {
+            pet.walkDirection = Math.random() > 0.5 ? 1 : -1;
+            walk();
+          }
+          schedule();
+        }, 2500 + Math.random() * 3000);
+      };
+      schedule();
+    }
+    function startBlinking() {
+      var blink = function () {
+        pet.blinkTimer = setTimeout(function () {
+          if (pet.isDragging || pet.isSleeping) { blink(); return; }
+          if (pet.currentState === 'idle' || pet.currentState === 'walk_left' || pet.currentState === 'walk_right') {
+            setState('idle_blink');
+            setTimeout(function () {
+              if (pet.currentState === 'idle_blink') setState('idle');
+            }, 200);
+          }
+          blink();
+        }, 4000 + Math.random() * 4000);
+      };
+      blink();
+    }
+    function startLooking() {
+      var look = function () {
+        pet.lookTimer = setTimeout(function () {
+          if (pet.isDragging || pet.isSleeping) { look(); return; }
+          if (pet.currentState === 'idle') {
+            var dir = Math.random() > 0.5 ? 'left' : 'right';
+            setState('idle_look_' + dir);
+            setTimeout(function () {
+              if (pet.currentState === 'idle_look_' + dir) setState('idle');
+            }, 1200);
+          }
+          look();
+        }, 4500 + Math.random() * 4000);
+      };
+      look();
+    }
+    function startSleepCheck() {
+      var check = function () {
+        pet.sleepTimer = setTimeout(function () {
+          if (!pet.isDragging && !pet.isSleeping && pet.chatOpen === false && (Date.now() - pet.lastInteraction) > 30000) {
+            pet.isSleeping = true;
+            setState('sleep');
+            showBubble('💤', 3000);
+          }
+          check();
+        }, 5000);
+      };
+      check();
+    }
+    function detectApp(appName) {
+      var state = APP_STATES[appName];
+      if (!state) return;
+      pet.lastInteraction = Date.now();
+      pet.isSleeping = false;
+      setState(state);
+      backToIdleAfter(3000);
+    }
+    /* ---------- 随机发呆小动作（闲置时随机冒泡/小跳，增加活力） ---------- */
+    var RANDOM_TALKS = [
+      '今天也要开开心心呀～', '嘿嘿，我在盯着你呢～', '想吃小虾米…', '你看起来好忙呀',
+      '要不要摸摸我？', '啦啦啦～', '我可是横着走的最快螃蟹！', '发会儿呆…'
+    ];
+    /* 随机动作表演池：闲置时随机表演一个行为动作（素材全部来自 PixelPet_Filled） */
+    var RANDOM_ACTIONS = [
+      /* —— 画好的成品动作（高权重，随机日常多演）—— */
+      /* 素材：pet_anim 系列、app_state 系列是完成稿（像素脸有轮廓） */
+      { s: 'happy',        w: 10, t: 1500, talk: '嘿嘿，好开心！' },
+      { s: 'eat',          w: 10, t: 2000, talk: '好香好香～开饭！' },
+      { s: 'idle_blink',   w: 8,  t: 1200, talk: '眨眨眼～' },
+      { s: 'bounce',       w: 6,  t: 1200, talk: '蹦蹦跳跳～' },
+      /* —— 素材为"未完成草稿"的动作（低权重，偶尔表演；聊天可随时触发）——
+       * 说明：PixelPet_Filled 里这些 action_* 只有网格+黑色占位块，
+       * 作者尚未画完。权重设为 1，避免日常频繁显示黑块脸。
+       */
+      { s: 'action_eating',   w: 1, t: 2200, talk: '开饭啦～' },
+      { s: 'action_drinking', w: 1, t: 2000, talk: '咕咚咕咚～' },
+      { s: 'action_wave',     w: 1, t: 1600, talk: '嗨～你好呀！' },
+      { s: 'action_salute',   w: 1, t: 1600, talk: '敬礼！' },
+      { s: 'action_shy',      w: 1, t: 1600, talk: '嘿嘿…害羞' },
+      { s: 'action_proud',    w: 1, t: 1600, talk: '我可真棒！' },
+      { s: 'action_hug',      w: 1, t: 1800, talk: '抱抱你～' },
+      { s: 'action_fly',      w: 1, t: 2000, talk: '飞起来啦～' },
+      { s: 'action_rotate',   w: 1, t: 1800, talk: '转个圈圈～' },
+      { s: 'action_bored',    w: 1, t: 1800, talk: '好无聊呀…' },
+      { s: 'action_cry',      w: 1, t: 2200, talk: '呜呜…' },
+      { s: 'action_sleepy',   w: 1, t: 2000, talk: '哈～欠…困困' },
+      { s: 'action_bow_down', w: 1, t: 1600, talk: '鞠躬～有礼啦' },
+      { s: 'action_brush',    w: 1, t: 1800, talk: '刷刷刷～' },
+      { s: 'action_rain',     w: 1, t: 2000, talk: '下雨咯' },
+      { s: 'action_petted',   w: 1, t: 1600, talk: '摸摸头～' },
+      { s: 'action_makeup',   w: 1, t: 2000, talk: '补个妆' },
+      { s: 'float',           w: 1, t: 2000, talk: '漂浮起来～' }
+    ];
+    function randomAction() {
+      var pool = [];
+      for (var i = 0; i < RANDOM_ACTIONS.length; i++) {
+        for (var k = 0; k < RANDOM_ACTIONS[i].w; k++) pool.push(RANDOM_ACTIONS[i]);
+      }
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    function startRandomActivity() {
+      var loop = function () {
+        setTimeout(function () {
+          if (!pet.isDragging && !pet.isSleeping && !pet.chatOpen &&
+              pet.currentState === 'idle' && (Date.now() - pet.lastInteraction) > 12000) {
+            var roll = Math.random();
+            if (roll < 0.35) {
+              showBubble(RANDOM_TALKS[Math.floor(Math.random() * RANDOM_TALKS.length)], 2200);
+            } else if (roll < 0.85) {
+              // 随机表演一个行为动作（30 个动作随机挑，2 秒左右回 idle）
+              var act = randomAction();
+              setState(act.s);
+              showBubble(act.talk, act.t);
+              backToIdleAfter(act.t);
+            } else {
+              setState('idle_blink');
+              setTimeout(function () { if (pet.currentState === 'idle_blink') setState('idle'); }, 260);
+            }
+          }
+          loop();
+        }, 6000 + Math.random() * 8000);
+      };
+      loop();
+    }
+
+    /* ============================================================
+     * 6. 对外接口（Kotlin -> JS 小写兼容层；Java 对象不动）
+     * ============================================================ */
+    window.pet = pet;
+    window.petBridge = {
+      onScreenshot: function () { setState('action_screenshot'); showBubble('📸 发现截图！', 2000); backToIdleAfter(2000); },
+      onCharging: function (isCharging) {
+        if (isCharging) { setState('action_charge'); showBubble('⚡ 充电中', 2500); backToIdleAfter(2500); }
+        else { setState('idle'); }
+      },
+      onBatteryLow: function () { setState('action_low_battery'); showBubble('🪫 电量低啦', 3000); backToIdleAfter(3000); },
+      onBatteryOkay: function () { setState('idle'); showBubble('🔋 电量正常', 1500); },
+      onTimeGreeting: function (msg) { showBubble(msg || '你好呀～', 3000); setState('happy'); backToIdleAfter(2000); },
+      onTapAnimation: function () { setState('happy'); backToIdleAfter(800); },
+      onLongPressAnimation: function () { setState('sad'); backToIdleAfter(1200); },
+      onReturned: function () { setState('idle'); }
+    };
+    window.moveWindowTo = function (x, y) {
+      var java = window.PetBridge;
+      if (java && typeof java.moveTo === 'function') java.moveTo(Math.round(x), Math.round(y));
+    };
+    window.moveWindowBy = function (dx, dy) {
+      var java = window.PetBridge;
+      if (java && typeof java.moveBy === 'function') java.moveBy(Math.round(dx), Math.round(dy));
+    };
+
+    /* ============================================================
+     * 7. 事件绑定
+     * ============================================================ */
+    container.addEventListener('touchstart', function (e) {
+      e.preventDefault();
+      if (e.touches && e.touches.length) { onTouchStart(e.touches[0]); pet.tapStartX = e.touches[0].clientX; pet.lastX = e.touches[0].clientX; pet.tapStartY = e.touches[0].clientY; pet.lastY = e.touches[0].clientY; }
+    }, { passive: false });
+    document.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+      if (e.touches && e.touches.length) onTouchMove(e.touches[0]);
+    }, { passive: false });
+    document.addEventListener('touchend', function (e) {
+      if (e.changedTouches && e.changedTouches.length) {
+        lastTouchEndTime = Date.now();
+        onTouchEnd(e.changedTouches[0]);
+      }
+    });
+    // 鼠标事件（桌面调试）
+    var lastTouchEndTime = 0;
+    container.addEventListener('mousedown', function (e) { onTouchStart(e); pet.lastX = e.clientX; pet.lastY = e.clientY; pet.tapStartX = e.clientX; pet.tapStartY = e.clientY; });
+    document.addEventListener('mousemove', function (e) { if (pet.isDragging) onTouchMove(e); });
+    document.addEventListener('mouseup', function (e) {
+      if (Date.now() - lastTouchEndTime < 500) return;  // 触摸后的合成鼠标事件，忽略
+      onTouchEnd(e);   // 桌面调试：非拖动点击也走单击/双击结算
+    });
+    // SVG 加载失败兜底
+    svg.addEventListener('error', function () {
+      if (pet.currentState !== 'idle') svg.src = 'pet_svg/pet_anim_breathe.svg';
+    });
+
+    /* ============================================================
+     * 8. 启动
+     * ============================================================ */
+    resetInitialPos();
+    startWalking();
+    startBlinking();
+    startLooking();
+    startSleepCheck();
+    startRandomActivity();
+    // 恢复心情值 + 首次欢迎
+    pet.heart = loadHeart();
+    var firstVisit = false;
+    try {
+      if (!localStorage.getItem('qi_pet_seen')) { localStorage.setItem('qi_pet_seen', '1'); firstVisit = true; }
+    } catch (e) {}
+    if (firstVisit) {
+      showBubble('🦀 我来了！双击我聊天，拖我随便放～', 3600);
+      setTimeout(function () { setState('happy'); backToIdleAfter(1500); }, 400);
+    }
+    // 调试：URL 带 #chat 时直接打开聊天面板
+    if (location.hash === '#chat') pet.toggleChat(true);
+    console.log('🦀 栖蟹崽桌宠 v0.4.0 已启动！');
+  })();
+  </script>
+</body>
+</html>

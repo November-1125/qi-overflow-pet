@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-height, initial-scale=1.0, user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:transparent;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+#pet{width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;transition:transform .3s ease}
+#pet.dragging{transition:none}
+#crab{width:80%;height:80%;filter:drop-shadow(2px 4px 3px rgba(0,0,0,.15));animation:idle 3s ease-in-out infinite}
+@keyframes idle{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-6px) scale(1.02)}}
+#pet.dragging #crab{animation:wiggle .3s ease-in-out infinite}
+@keyframes wiggle{0%,100%{transform:rotate(-8deg) scale(.95)}50%{transform:rotate(8deg) scale(.95)}}
+.pop{animation:pop .4s cubic-bezier(.34,1.56,.64,1)!important}
+@keyframes pop{0%{transform:scale(.7);opacity:.5}100%{transform:scale(1);opacity:1}}
+#bubble{position:absolute;bottom:78%;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.96);color:#3a3a3a;padding:6px 12px;border-radius:12px;font-size:11px;font-family:"PingFang SC","Microsoft YaHei",sans-serif;white-space:nowrap;max-width:130px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.12);opacity:0;transition:opacity .3s;pointer-events:none;z-index:10}
+#bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(255,255,255,.96)}
+#bubble.show{opacity:1}
+#fx{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.heart{position:absolute;font-size:14px;animation:float-up 1.2s ease-out forwards}
+@keyframes float-up{0%{transform:translateY(0) scale(0);opacity:1}50%{transform:translateY(-30px) scale(1.2);opacity:1}100%{transform:translateY(-60px) scale(.6);opacity:0}}
+</style>
+</head>
+<body>
+<div id="pet">
+<div id="bubble"></div>
+<div id="fx"></div>
+<svg id="crab" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+<ellipse cx="100" cy="180" rx="45" ry="6" fill="rgba(0,0,0,.08)"/>
+<ellipse id="body" cx="100" cy="110" rx="55" ry="42" fill="#E85D4A"/>
+<ellipse cx="100" cy="105" rx="48" ry="35" fill="#FF7060"/>
+<ellipse cx="100" cy="125" rx="35" ry="18" fill="#FFB3A8" opacity=".6"/>
+<g id="claw-l"><ellipse cx="42" cy="100" rx="18" ry="12" fill="#E85D4A" transform="rotate(-20 42 100)"/><ellipse cx="30" cy="88" rx="14" ry="11" fill="#FF7060"/><path d="M22 82 Q18 78 20 88Z" fill="#E85D4A"/><path d="M38 82 Q34 78 36 88Z" fill="#E85D4A"/></g>
+<g id="claw-r"><ellipse cx="158" cy="100" rx="18" ry="12" fill="#E85D4A" transform="rotate(20 158 100)"/><ellipse cx="170" cy="88" rx="14" ry="11" fill="#FF7060"/><path d="M162 82 Q166 78 164 88Z" fill="#E85D4A"/><path d="M178 82 Q182 78 180 88Z" fill="#E85D4A"/></g>
+<g><rect x="60" y="145" width="6" height="18" rx="3" fill="#E85D4A"/><rect x="50" y="158" width="5" height="12" rx="2.5" fill="#D04838" transform="rotate(-15 52 164)"/><rect x="70" y="158" width="5" height="12" rx="2.5" fill="#D04838" transform="rotate(15 72 164)"/></g>
+<g><rect x="134" y="145" width="6" height="18" rx="3" fill="#E85D4A"/><rect x="125" y="158" width="5" height="12" rx="2.5" fill="#D04838" transform="rotate(-15 127 164)"/><rect x="145" y="158" width="5" height="12" rx="2.5" fill="#D04838" transform="rotate(15 147 164)"/></g>
+<g id="eyes"><ellipse id="eye-l" cx="82" cy="95" rx="12" ry="14" fill="white"/><ellipse id="eye-r" cx="118" cy="95" rx="12" ry="14" fill="white"/><circle id="pup-l" cx="82" cy="95" r="6" fill="#2A2A2A"/><circle id="pup-r" cx="118" cy="95" r="6" fill="#2A2A2A"/><circle cx="84" cy="92" r="2" fill="white"/><circle cx="120" cy="92" r="2" fill="white"/></g>
+<path id="mouth" d="M88 118 Q100 124 112 118" stroke="#2A2A2A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+<ellipse id="blush-l" cx="65" cy="112" rx="7" ry="4" fill="#FF9B8A" opacity=".7"/>
+<ellipse id="blush-r" cx="135" cy="112" rx="7" ry="4" fill="#FF9B8A" opacity=".7"/>
+</svg>
+</div>
+<script>
+var bubble=document.getElementById('bubble'),crab=document.getElementById('crab'),pet=document.getElementById('pet'),fx=document.getElementById('fx');
+var mouth=document.getElementById('mouth'),eyeL=document.getElementById('eye-l'),eyeR=document.getElementById('eye-r'),pupL=document.getElementById('pup-l'),pupR=document.getElementById('pup-r'),blushL=document.getElementById('blush-l'),blushR=document.getElementById('blush-r');
+var speechTimer=null;
+
+function setPetMood(m){
+  var mouths={idle:'M88 118 Q100 124 112 118',happy:'M85 115 Q100 132 115 115',shy:'M92 120 Q100 116 108 120',surprised:'M95 120 Q100 128 105 120 Q100 112 95 120',wink:'M88 118 Q100 126 112 118',neutral:'M88 120 L112 120',sleepy:'M92 122 Q100 120 108 122',sad:'M88 124 Q100 116 112 124',crying:'M88 126 Q100 114 112 126'};
+  mouth.setAttribute('d',mouths[m]||mouths.idle);
+  pupL.style.display='block';pupR.style.display='block';
+  eyeL.setAttribute('rx','12');eyeL.setAttribute('ry','14');eyeL.setAttribute('cy','95');
+  eyeR.setAttribute('rx','12');eyeR.setAttribute('ry','14');eyeR.setAttribute('cy','95');
+  var eyes={happy:'close',shy:'close',sleepy:'close',wink:'wink',crying:'close',sad:'small'};
+  var e=eyes[m];
+  if(e==='close'){pupL.style.display='none';pupR.style.display='none';eyeL.setAttribute('ry','2');eyeR.setAttribute('ry','2')}
+  else if(e==='wink'){pupL.style.display='none';eyeL.setAttribute('ry','2')}
+  else if(e==='small'){eyeL.setAttribute('ry','10');eyeL.setAttribute('cy','98');eyeR.setAttribute('ry','10');eyeR.setAttribute('cy','98')}
+  crab.classList.remove('pop');void crab.offsetWidth;crab.classList.add('pop');
+  if(m==='happy'||m==='wink')spawnHearts();
+}
+
+function setPetSpeech(t,ms){
+  if(!t)return;
+  bubble.textContent=t;bubble.classList.add('show');
+  if(speechTimer)clearTimeout(speechTimer);
+  setTimeout(function(){bubble.classList.remove('show')},ms||2200);
+}
+
+function setDragging(d){pet.classList.toggle('dragging',d)}
+
+function spawnHearts(){
+  var symbols=['💕','💗','💖','✨'];
+  for(var i=0;i<3;i++){
+    var h=document.createElement('div');h.className='heart';h.textContent=symbols[i%symbols.length];
+    h.style.left=(30+Math.random()*40)+'%';h.style.bottom=(30+Math.random()*20)+'%';
+    fx.appendChild(h);setTimeout(function(x){return function(){x.remove()}}(h),1200);
+  }
+}
+
+setPetMood('idle');
+</script>
+</body>
+</html>

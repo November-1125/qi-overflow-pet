@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#EF8354</color>
+    <color name="bg_bottom">#EEF7F1</color>
+    <color name="bg_top">#CFE8E0</color>
+    <color name="ink">#2C3A33</color>
+    <color name="slime">#8FD3C7</color>
+    <color name="slime_dark">#5FB3A3</color>
+    <color name="white">#FFFFFF</color>
+    <string name="app_name">Clawd 桌宠</string>
+    <style name="Theme.DouDou" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/slime_dark</item>
+        <item name="colorPrimaryDark">@color/slime_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/bg_bottom</item>
+    </style>
+</resources>

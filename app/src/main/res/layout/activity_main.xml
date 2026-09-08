@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="@color/bg_bottom">
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="小蟹桌宠"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="@color/ink"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="点下面按钮把小蟹叫出来吧"
+        android:textSize="14sp"
+        android:textColor="@color/ink"
+        android:gravity="center"
+        android:layout_marginBottom="32dp" />
+
+    <Button
+        android:id="@+id/toggleButton"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="开启悬浮桌宠"
+        android:textColor="@color/white"
+        android:backgroundTint="@color/slime_dark"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/usageButton"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:text="授权前台App检测（可选）"
+        android:textColor="@color/white"
+        android:backgroundTint="@color/accent"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/hintText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="悬浮窗打开后，可以在任意 App 界面上方拖动、单击/双击/长按小蟹互动。想让 AI 远程控制表情和说话，需要先按 README 配置 Supabase。"
+        android:textSize="12sp"
+        android:textColor="#6B7A72"
+        android:gravity="center"
+        android:layout_marginTop="24dp" />
+
+</LinearLayout>
