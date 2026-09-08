@@ -40,9 +40,6 @@ class OverlayService : Service() {
     private var isDragging = false
     private var lastInteractionTime = System.currentTimeMillis()
 
-    private val greetings = listOf(
-        "嘿，我在呢", "戳我干嘛呀", "今天过得怎么样？", "累了就歇会儿吧"
-    )
     private val whispers = listOf(
         "记得喝水呀", "坐久了动一动", "今天也要开心一点", "我一直都在这儿",
         "眼睛累了就看看远方", "深呼吸一下吧"
@@ -93,8 +90,6 @@ class OverlayService : Service() {
         manager.notify(NOTIFICATION_ID, buildNotification(text))
     }
 
-    // ============ 悬浮窗 ============
-
     private fun showOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
@@ -105,9 +100,9 @@ class OverlayService : Service() {
             loadUrl("file:///android_asset/pet.html")
         }
 
-        // 调小尺寸：80dp 宽 x 55dp 高
-        val widthPx = (80 * resources.displayMetrics.density).toInt()
-        val heightPx = (55 * resources.displayMetrics.density).toInt()
+        // 窗口尺寸匹配 pet.html 容器 140x90px (CSS px = dp)
+        val widthPx = (140 * resources.displayMetrics.density).toInt()
+        val heightPx = (90 * resources.displayMetrics.density).toInt()
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         else
@@ -123,10 +118,8 @@ class OverlayService : Service() {
         layoutParams.x = 40
         layoutParams.y = 300
 
-        // 注入 PetBridge JS 接口
         webView.addJavascriptInterface(PetBridge(), "PetBridge")
 
-        // 手势：把所有触摸交给 pet.html 处理，Kotlin 只管窗口拖动
         webView.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -218,12 +211,10 @@ class OverlayService : Service() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
-                    Intent.ACTION_POWER_CONNECTED -> {
+                    Intent.ACTION_POWER_CONNECTED ->
                         webView.evaluateJavascript("window.petBridge && window.petBridge.onCharging && window.petBridge.onCharging(true)", null)
-                    }
-                    Intent.ACTION_POWER_DISCONNECTED -> {
+                    Intent.ACTION_POWER_DISCONNECTED ->
                         webView.evaluateJavascript("window.petBridge && window.petBridge.onCharging && window.petBridge.onCharging(false)", null)
-                    }
                 }
             }
         }
@@ -263,9 +254,7 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-        }
+        if (intent?.action == ACTION_STOP) stopSelf()
         return START_STICKY
     }
 
